@@ -65,7 +65,12 @@ def app_nav_course(curr_path=Path.cwd(), title=DEFAULT_TITLE, show_hidden=False)
         else:
             curr_path = val
 
+# get the "<NAME>: <TITLE>" title string from an 'infoCourse.json' file's loaded data
+def get_title(infocourse_data):
+    return '%s: %s' % (infocourse_data['name'], infocourse_data['title'])
+
 # class to represent a PrairieLearn course
+# https://github.com/PrairieLearn/PrairieLearn/blob/master/apps/prairielearn/src/schemas/schemas/infoCourse.json
 class PLCourse:
     # initialize this PLCourse object
     def __init__(self, course_path):
@@ -73,11 +78,15 @@ class PLCourse:
             error("Invalid PrairieLearn course path: %s" % course_path)
         self.course_path = course_path
 
-    # run app to manage this course
-    def app_manage(self):
-        text = '\n'.join('- %s: %s' % tup for tup in sorted(jload(open(self.course_path / 'infoCourse.json')).items(), key=lambda x: x[0]))
-        message_dialog(title=str(self.course_path), text=text).run()
-        pass # TODO REPLACE WITH ACTUAL APP
+    # run app for the home view of this PLCourse object
+    def app_home(self):
+        data = jload(open(self.course_path / 'infoCourse.json'))
+        order = [('uuid','UUID'), ('name','Name'), ('title','Title')]
+        text = '\n'.join('- <ansiblue>%s:</ansiblue> %s' % (s, data[k]) for k, s in order)
+        pass # TODO ADD OTHER NIFO
+        text = HTML(text)
+        message_dialog(title=get_title(data), text=text).run()
+        return None # TODO REPLACE WITH ACTUAL APP
 
 # main program logic
 def main():
@@ -95,7 +104,7 @@ def main():
     if pl_course_dir is None:
         app_welcome(); pl_course_dir = app_nav_course()
     pl_course = PLCourse(pl_course_dir)
-    pl_course.app_manage()
+    pl_course.app_home()
 
 # run main program
 if __name__ == "__main__":
