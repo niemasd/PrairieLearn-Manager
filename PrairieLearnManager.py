@@ -25,6 +25,9 @@ try:
 except:
     error("Unable to import 'prompt_toolkit'. Install via: 'pip install prompt_toolkit'")
 
+# useful prompt_toolkit constants
+APP_EXIT_TUPLE = (False, HTML('<ansired>--- Exit Application ---</ansired>'))
+
 # app: welcome message
 def app_welcome():
     text = HTML("Welcome to <ansiblue>PrairieLearn Manager v%s</ansiblue>!\n\n<ansigreen>Niema Moshiri 2024</ansigreen>" % VERSION)
@@ -56,10 +59,15 @@ def app_nav_course(curr_path=Path.cwd(), title=DEFAULT_TITLE, show_hidden=False)
                 except:
                     continue # skip folders we don't have access to
 
+        # add "Exit" option
+        values.append(APP_EXIT_TUPLE)
+
         # run the dialog and handle its return value
         val = radiolist_dialog(title=title, values=values, text=text).run()
         if val is None:
             return None
+        elif val is False:
+            exit()
         elif val == '.':
             return curr_path
         else:
@@ -86,14 +94,18 @@ class PLCourse:
             data = jload(open(self.path / 'infoCourse.json'))
             order = [('uuid','UUID'), ('name','Name'), ('title','Title')]
             text = '\n'.join('- <ansiblue>%s:</ansiblue> %s' % (s, data[k]) for k, s in order)
+            text += '\n- <ansiblue>Topics:</ansiblue> %s' % {True:'None', False:', '.join(data['topics'])}[len(data['topics']) == 0]
             pass # TODO ADD OTHER COURSE INFO
             values = [
                 ('course_instances', "View Course Instances"),
+                APP_EXIT_TUPLE,
             ]
             text = HTML(text)
             val = radiolist_dialog(title=get_course_title(data), text=text, values=values).run()
             if val is None:
                 break
+            elif val is False:
+                exit()
             elif val == 'course_instances':
                 self.app_course_instances()
             else:
@@ -107,9 +119,12 @@ class PLCourse:
             text = '- <ansiblue>Number of Course Instances:</ansiblue> %d' % len(course_instances_data)
             text = HTML(text)
             values = sorted(((PLCourseInstance(p), HTML('<ansigreen>%s</ansigreen> (%s)' % (course_instances_data[p]['longName'], p.name))) for p in course_instances_data), key=lambda x: str(x[1]).lower())
+            values.append(APP_EXIT_TUPLE)
             val = radiolist_dialog(title=title, text=text, values=values).run()
             if val is None:
                 break
+            elif val is False:
+                exit()
             else:
                 val.app_home()
 
@@ -131,11 +146,14 @@ class PLCourseInstance:
             pass # TODO ADD OTHER COURSE INFO
             values = [
                 ('assessments', 'View Assessments'),
+                APP_EXIT_TUPLE,
             ]
             text = HTML(text)
             val = radiolist_dialog(title="Course Instance: %s" % data['longName'], text=text, values=values).run()
             if val is None:
                 break
+            elif val is False:
+                exit()
             elif val == 'course_instances':
                 self.app_course_instances()
             else:
