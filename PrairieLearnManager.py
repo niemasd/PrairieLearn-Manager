@@ -104,15 +104,15 @@ class PLCourse:
         while True:
             title = "Course Instances (%s)" % get_course_title(self)
             course_instances_data = {child:jload(open(child / 'infoCourseInstance.json')) for child in self.course_path.glob('courseInstances/*')}
-            values = sorted(((PLCourseInstance(p), '%s (%s)' % (course_instances_data[p]['longName'], p.name)) for p in course_instances_data), key=lambda x: x[1].lower())
+            values = sorted(((PLCourseInstance(p), HTML('<ansigreen>%s</ansigreen> (%s)' % (course_instances_data[p]['longName'], p.name))) for p in course_instances_data), key=lambda x: str(x[1]).lower())
             val = radiolist_dialog(title=title, values=values).run()
             if val is None:
                 break
             else:
-                error("Invalid selection: %s" % val)
+                val.app_home()
 
 # class to represent a PrairieLearn course instance
-# TODO ADD SCHEMA URL
+# https://github.com/PrairieLearn/PrairieLearn/blob/master/apps/prairielearn/src/schemas/schemas/infoCourseInstance.json
 class PLCourseInstance:
     # initialize this PLCourseInstance object
     def __init__(self, course_instance_path):
