@@ -97,7 +97,7 @@ class PLCourse:
             text += '\n- <ansiblue>Topics:</ansiblue> %s' % {True:'None', False:', '.join(data['topics'])}[len(data['topics']) == 0]
             pass # TODO ADD OTHER COURSE INFO
             values = [
-                ('course_instances', "View Course Instances"),
+                ('course_instances', HTML("<ansigreen>View Course Instances</ansigreen>")),
                 APP_EXIT_TUPLE,
             ]
             text = HTML(text)
@@ -145,7 +145,7 @@ class PLCourseInstance:
             text = '\n'.join('- <ansiblue>%s:</ansiblue> %s' % (s, data[k]) for k, s in order)
             pass # TODO ADD OTHER COURSE INFO
             values = [
-                ('assessments', 'View Assessments'),
+                ('assessments', HTML('<ansigreen>View Assessments</ansigreen>')),
                 APP_EXIT_TUPLE,
             ]
             text = HTML(text)
