@@ -76,7 +76,8 @@ def app_nav_course(curr_path=Path.cwd(), title=DEFAULT_TITLE, show_hidden=False)
 # get the "<NAME>: <TITLE>" title string from an 'infoCourse.json' file's loaded data (or load the data if given a PLCourse)
 def get_course_title(infocourse_data):
     if isinstance(infocourse_data, PLCourse):
-        infocourse_data = jload(open(infocourse_data.path / 'infoCourse.json'))
+        with open(infocourse_data.path / 'infoCourse.json') as f:
+            infocourse_data = jload(f)
     return '%s: %s' % (infocourse_data['name'], infocourse_data['title'])
 
 # class to represent a PrairieLearn course
@@ -91,7 +92,8 @@ class PLCourse:
     # run app for the home view of this PLCourse object
     def app_home(self):
         while True:
-            data = jload(open(self.path / 'infoCourse.json'))
+            with open(self.path / 'infoCourse.json') as f:
+                data = jload(f)
             order = [('uuid','UUID'), ('name','Name'), ('title','Title')]
             text = '\n'.join('- <ansiblue>%s:</ansiblue> %s' % (s, data[k]) for k, s in order)
             text += '\n- <ansiblue>Topics:</ansiblue> %s' % {True:'None', False:', '.join(data['topics'])}[len(data['topics']) == 0]
@@ -115,7 +117,10 @@ class PLCourse:
     def app_course_instances(self):
         while True:
             title = "Course Instances (%s)" % get_course_title(self)
-            course_instances_data = {child:jload(open(child / 'infoCourseInstance.json')) for child in self.path.glob('courseInstances/*')}
+            course_instances_data = dict()
+            for child in self.path.glob('courseInstances/*'):
+                with open(child / 'infoCourseInstance.json') as f:
+                    course_instances_data[child] = jload(f)
             text = '- <ansiblue>Number of Course Instances:</ansiblue> %d' % len(course_instances_data)
             text = HTML(text)
             values = sorted(((PLCourseInstance(p), HTML('<ansigreen>%s</ansigreen> (%s)' % (course_instances_data[p]['longName'], p.name))) for p in course_instances_data), key=lambda x: str(x[1]).lower())
@@ -127,6 +132,13 @@ class PLCourse:
                 exit()
             else:
                 val.app_home()
+
+# get the "Course Instance: <NAME>" title string from an 'infoCourseInstance.json' file's loaded data (or load the data if given a PLCourseInstance)
+def get_course_instance_title(infocourseinstance_data):
+    if isinstance(infocourseinstance_data, PLCourseInstance):
+        with open(infocourseinstance_data.path / 'infoCourseInstance.json') as f:
+            infocourseinstance_data = jload(f)
+    return infocourseinstance_data['longName']
 
 # class to represent a PrairieLearn course instance
 # https://github.com/PrairieLearn/PrairieLearn/blob/master/apps/prairielearn/src/schemas/schemas/infoCourseInstance.json
@@ -140,7 +152,8 @@ class PLCourseInstance:
     # run app for the home view of this PLCourseInstance object
     def app_home(self):
         while True:
-            data = jload(open(self.path / 'infoCourseInstance.json'))
+            with open(self.path / 'infoCourseInstance.json') as f:
+                data = jload(f)
             order = [('uuid','UUID'), ('longName','Long Name')]
             text = '\n'.join('- <ansiblue>%s:</ansiblue> %s' % (s, data[k]) for k, s in order)
             pass # TODO ADD OTHER COURSE INFO
@@ -149,15 +162,34 @@ class PLCourseInstance:
                 APP_EXIT_TUPLE,
             ]
             text = HTML(text)
-            val = radiolist_dialog(title="Course Instance: %s" % data['longName'], text=text, values=values).run()
+            val = radiolist_dialog(title='Course Instance: %s' % get_course_instance_title(data), text=text, values=values).run()
             if val is None:
                 break
             elif val is False:
                 exit()
-            elif val == 'course_instances':
-                self.app_course_instances()
+            elif val == 'assessments':
+                self.app_assessments()
             else:
                 error("Invalid selection: %s" % val)
+
+    # run app for assessments view
+    def app_assessments(self):
+        while True:
+            title = "Assessments (%s)" % get_course_instance_title(self)
+            assessments_data = dict()
+            for p in (self.path / 'assessments').rglob('infoAssessment.json'):
+                with open(p) as f:
+                    assessments_data[p] = jload(f)
+            text = '- <ansiblue>Number of Assessments:</ansiblue> %d' % len(assessments_data)
+            values = sorted(((PLAssessment(p), HTML('<ansigreen>%s</ansigreen> - %s' % (assessments_data[p]['title'], p))) for p in assessments_data), key=lambda x: str(x[1]).lower())
+            values.append(APP_EXIT_TUPLE)
+            val = radiolist_dialog(title=title, text=text, values=values).run()
+            if val is None:
+                break
+            elif val is False:
+                exit()
+            else:
+                val.app_home()
 
 # main program logic
 def main():
