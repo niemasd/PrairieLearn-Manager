@@ -68,7 +68,7 @@ def app_nav_course(curr_path=Path.cwd(), title=DEFAULT_TITLE, show_hidden=False)
 # get the "<NAME>: <TITLE>" title string from an 'infoCourse.json' file's loaded data (or load the data if given a PLCourse)
 def get_course_title(infocourse_data):
     if isinstance(infocourse_data, PLCourse):
-        infocourse_data = jload(open(infocourse_data.course_path / 'infoCourse.json'))
+        infocourse_data = jload(open(infocourse_data.path / 'infoCourse.json'))
     return '%s: %s' % (infocourse_data['name'], infocourse_data['title'])
 
 # class to represent a PrairieLearn course
@@ -78,12 +78,12 @@ class PLCourse:
     def __init__(self, course_path):
         if not (course_path / 'infoCourse.json').is_file():
             error("Invalid PrairieLearn course path: %s" % course_path)
-        self.course_path = course_path
+        self.path = course_path
 
     # run app for the home view of this PLCourse object
     def app_home(self):
         while True:
-            data = jload(open(self.course_path / 'infoCourse.json'))
+            data = jload(open(self.path / 'infoCourse.json'))
             order = [('uuid','UUID'), ('name','Name'), ('title','Title')]
             text = '\n'.join('- <ansiblue>%s:</ansiblue> %s' % (s, data[k]) for k, s in order)
             pass # TODO ADD OTHER COURSE INFO
@@ -103,9 +103,11 @@ class PLCourse:
     def app_course_instances(self):
         while True:
             title = "Course Instances (%s)" % get_course_title(self)
-            course_instances_data = {child:jload(open(child / 'infoCourseInstance.json')) for child in self.course_path.glob('courseInstances/*')}
+            course_instances_data = {child:jload(open(child / 'infoCourseInstance.json')) for child in self.path.glob('courseInstances/*')}
+            text = '- <ansiblue>Number of Course Instances:</ansiblue> %d' % len(course_instances_data)
+            text = HTML(text)
             values = sorted(((PLCourseInstance(p), HTML('<ansigreen>%s</ansigreen> (%s)' % (course_instances_data[p]['longName'], p.name))) for p in course_instances_data), key=lambda x: str(x[1]).lower())
-            val = radiolist_dialog(title=title, values=values).run()
+            val = radiolist_dialog(title=title, text=text, values=values).run()
             if val is None:
                 break
             else:
@@ -118,7 +120,26 @@ class PLCourseInstance:
     def __init__(self, course_instance_path):
         if not (course_instance_path / 'infoCourseInstance.json').is_file():
             error("Invalid PrairieLearn course instance path: %s" % course_instance_path)
-        self.course_instance_path = course_instance_path
+        self.path = course_instance_path
+
+    # run app for the home view of this PLCourseInstance object
+    def app_home(self):
+        while True:
+            data = jload(open(self.path / 'infoCourseInstance.json'))
+            order = [('uuid','UUID'), ('longName','Long Name')]
+            text = '\n'.join('- <ansiblue>%s:</ansiblue> %s' % (s, data[k]) for k, s in order)
+            pass # TODO ADD OTHER COURSE INFO
+            values = [
+                ('assessments', 'View Assessments'),
+            ]
+            text = HTML(text)
+            val = radiolist_dialog(title="Course Instance: %s" % data['longName'], text=text, values=values).run()
+            if val is None:
+                break
+            elif val == 'course_instances':
+                self.app_course_instances()
+            else:
+                error("Invalid selection: %s" % val)
 
 # main program logic
 def main():
