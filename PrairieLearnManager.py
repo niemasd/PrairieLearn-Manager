@@ -192,6 +192,13 @@ class PLCourseInstance:
             else:
                 val.app_home()
 
+# get the "<SET> <NUMBER> (<TITLE>)" title string from an 'infoAssessment.json' file's loaded data (or load the data if given a PLAssessment)
+def get_assessment_title(assessment_data):
+    if isinstance(assessment_data, PLAssessment):
+        with open(assessment_data.path / 'infoAssessment.json') as f:
+            assessment_data = jload(f)
+    return '%s %s (%s)' % (assessment_data['set'], assessment_data['number'], assessment_data['title'])
+
 # class to represent a PrairieLearn assessment
 # https://github.com/PrairieLearn/PrairieLearn/blob/master/apps/prairielearn/src/schemas/schemas/infoAssessment.json
 class PLAssessment:
@@ -200,6 +207,26 @@ class PLAssessment:
         if not (path / 'infoAssessment.json').is_file():
             error("Invalid PrairieLearn assessment path: %s" % path)
         self.path = path
+
+    # run app for home view of this PLAssessment object
+    def app_home(self):
+        while True:
+            with open(self.path / 'infoAssessment.json') as f:
+                data = jload(f)
+            order = [('uuid','UUID'), ('type','Type'), ('set','Set'), ('number','Number'), ('title','Title')]
+            text = '\n'.join('- <ansiblue>%s:</ansiblue> %s' % (s, data[k]) for k, s in order)
+            pass # TODO ADD OTHER COURSE INFO
+            values = [
+                APP_EXIT_TUPLE,
+            ]
+            text = HTML(text)
+            val = radiolist_dialog(title='Assessment: %s' % get_assessment_title(data), text=text, values=values).run()
+            if val is None:
+                break
+            elif val is False:
+                exit()
+            else:
+                error("Invalid selection: %s" % val)
 
 # main program logic
 def main():
