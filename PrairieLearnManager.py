@@ -65,8 +65,10 @@ def app_nav_course(curr_path=Path.cwd(), title=DEFAULT_TITLE, show_hidden=False)
         else:
             curr_path = val
 
-# get the "<NAME>: <TITLE>" title string from an 'infoCourse.json' file's loaded data
-def get_title(infocourse_data):
+# get the "<NAME>: <TITLE>" title string from an 'infoCourse.json' file's loaded data (or load the data if given a PLCourse)
+def get_course_title(infocourse_data):
+    if isinstance(infocourse_data, PLCourse):
+        infocourse_data = jload(open(infocourse_data.course_path / 'infoCourse.json'))
     return '%s: %s' % (infocourse_data['name'], infocourse_data['title'])
 
 # class to represent a PrairieLearn course
@@ -80,13 +82,43 @@ class PLCourse:
 
     # run app for the home view of this PLCourse object
     def app_home(self):
-        data = jload(open(self.course_path / 'infoCourse.json'))
-        order = [('uuid','UUID'), ('name','Name'), ('title','Title')]
-        text = '\n'.join('- <ansiblue>%s:</ansiblue> %s' % (s, data[k]) for k, s in order)
-        pass # TODO ADD OTHER NIFO
-        text = HTML(text)
-        message_dialog(title=get_title(data), text=text).run()
-        return None # TODO REPLACE WITH ACTUAL APP
+        while True:
+            data = jload(open(self.course_path / 'infoCourse.json'))
+            order = [('uuid','UUID'), ('name','Name'), ('title','Title')]
+            text = '\n'.join('- <ansiblue>%s:</ansiblue> %s' % (s, data[k]) for k, s in order)
+            pass # TODO ADD OTHER COURSE INFO
+            values = [
+                ('course_instances', "View Course Instances"),
+            ]
+            text = HTML(text)
+            val = radiolist_dialog(title=get_course_title(data), text=text, values=values).run()
+            if val is None:
+                break
+            elif val == 'course_instances':
+                self.app_course_instances()
+            else:
+                error("Invalid selection: %s" % val)
+
+    # run app for course instances view
+    def app_course_instances(self):
+        while True:
+            title = "Course Instances (%s)" % get_course_title(self)
+            course_instances_data = {child:jload(open(child / 'infoCourseInstance.json')) for child in self.course_path.glob('courseInstances/*')}
+            values = sorted(((PLCourseInstance(p), '%s (%s)' % (course_instances_data[p]['longName'], p.name)) for p in course_instances_data), key=lambda x: x[1].lower())
+            val = radiolist_dialog(title=title, values=values).run()
+            if val is None:
+                break
+            else:
+                error("Invalid selection: %s" % val)
+
+# class to represent a PrairieLearn course instance
+# TODO ADD SCHEMA URL
+class PLCourseInstance:
+    # initialize this PLCourseInstance object
+    def __init__(self, course_instance_path):
+        if not (course_instance_path / 'infoCourseInstance.json').is_file():
+            error("Invalid PrairieLearn course instance path: %s" % course_instance_path)
+        self.course_instance_path = course_instance_path
 
 # main program logic
 def main():
