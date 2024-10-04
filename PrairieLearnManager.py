@@ -49,7 +49,7 @@ def app_nav_course(curr_path=Path.cwd(), title=DEFAULT_TITLE, show_hidden=False)
             values.append(('.', HTML("<ansigreen>--- Select This Course ---</ansigreen>")))
 
         # add all children of this path
-        for child in sorted(curr_path.iterdir(), key=lambda x: x.name.lower()):
+        for child in sorted(curr_path.iterdir(), key=lambda x: x.name.strip().lower()):
             if child.is_dir() and (show_hidden or child.name[0] != '.'):
                 try:
                     if (child / 'infoCourse.json').is_file():
@@ -84,10 +84,10 @@ def get_course_title(infocourse_data):
 # https://github.com/PrairieLearn/PrairieLearn/blob/master/apps/prairielearn/src/schemas/schemas/infoCourse.json
 class PLCourse:
     # initialize this PLCourse object
-    def __init__(self, course_path):
-        if not (course_path / 'infoCourse.json').is_file():
-            error("Invalid PrairieLearn course path: %s" % course_path)
-        self.path = course_path
+    def __init__(self, path):
+        if not (path / 'infoCourse.json').is_file():
+            error("Invalid PrairieLearn course path: %s" % path)
+        self.path = path
 
     # run app for the home view of this PLCourse object
     def app_home(self):
@@ -123,7 +123,7 @@ class PLCourse:
                     course_instances_data[child] = jload(f)
             text = '- <ansiblue>Number of Course Instances:</ansiblue> %d' % len(course_instances_data)
             text = HTML(text)
-            values = sorted(((PLCourseInstance(p), HTML('<ansigreen>%s</ansigreen> (%s)' % (course_instances_data[p]['longName'], p.name))) for p in course_instances_data), key=lambda x: str(x[1]).lower())
+            values = sorted(((PLCourseInstance(p), HTML('<ansigreen>%s</ansigreen> (%s)' % (course_instances_data[p]['longName'], p.name))) for p in course_instances_data), key=lambda x: x[1].value.lower())
             values.append(APP_EXIT_TUPLE)
             val = radiolist_dialog(title=title, text=text, values=values).run()
             if val is None:
@@ -144,10 +144,10 @@ def get_course_instance_title(infocourseinstance_data):
 # https://github.com/PrairieLearn/PrairieLearn/blob/master/apps/prairielearn/src/schemas/schemas/infoCourseInstance.json
 class PLCourseInstance:
     # initialize this PLCourseInstance object
-    def __init__(self, course_instance_path):
-        if not (course_instance_path / 'infoCourseInstance.json').is_file():
-            error("Invalid PrairieLearn course instance path: %s" % course_instance_path)
-        self.path = course_instance_path
+    def __init__(self, path):
+        if not (path / 'infoCourseInstance.json').is_file():
+            error("Invalid PrairieLearn course instance path: %s" % path)
+        self.path = path
 
     # run app for the home view of this PLCourseInstance object
     def app_home(self):
@@ -179,9 +179,10 @@ class PLCourseInstance:
             assessments_data = dict()
             for p in (self.path / 'assessments').rglob('infoAssessment.json'):
                 with open(p) as f:
-                    assessments_data[p] = jload(f)
+                    assessments_data[p.parent] = jload(f)
             text = '- <ansiblue>Number of Assessments:</ansiblue> %d' % len(assessments_data)
-            values = sorted(((PLAssessment(p), HTML('<ansigreen>%s</ansigreen> - %s' % (assessments_data[p]['title'], p))) for p in assessments_data), key=lambda x: str(x[1]).lower())
+            text = HTML(text)
+            values = sorted(((PLAssessment(p), HTML('<ansigreen>%s %s</ansigreen> - %s (%s)' % (assessments_data[p]['set'], assessments_data[p]['number'], assessments_data[p]['title'], assessments_data[p]['type']))) for p in assessments_data), key=lambda x: x[1].value.lower())
             values.append(APP_EXIT_TUPLE)
             val = radiolist_dialog(title=title, text=text, values=values).run()
             if val is None:
@@ -190,6 +191,15 @@ class PLCourseInstance:
                 exit()
             else:
                 val.app_home()
+
+# class to represent a PrairieLearn assessment
+# https://github.com/PrairieLearn/PrairieLearn/blob/master/apps/prairielearn/src/schemas/schemas/infoAssessment.json
+class PLAssessment:
+    # initialize this PLAssessment object
+    def __init__(self, path):
+        if not (path / 'infoAssessment.json').is_file():
+            error("Invalid PrairieLearn assessment path: %s" % path)
+        self.path = path
 
 # main program logic
 def main():
