@@ -89,6 +89,16 @@ class PLCourse:
             error("Invalid PrairieLearn course path: %s" % path)
         self.path = path
 
+    # iterate over course instances in this course
+    def iter_course_instances(self):
+        for p in self.path.glob('courseInstances/*/infoCourseInstance.json'):
+            yield PLCourseInstance(p.parent)
+
+    # iterate over questions in this course
+    def iter_questions(self):
+        for p in (self.path / 'questions').rglob('question.html'):
+            yield PLQuestion(p.parent)
+
     # run app for the home view of this PLCourse object
     def app_home(self):
         while True:
@@ -122,12 +132,11 @@ class PLCourse:
         while True:
             title = "Course Instances (%s)" % get_course_title(self)
             course_instances_data = dict()
-            for child in self.path.glob('courseInstances/*'):
-                with open(child / 'infoCourseInstance.json') as f:
-                    course_instances_data[child] = jload(f)
+            for ci in self.iter_course_instances():
+                course_instances_data[ci] = ci.get_info_data()
             text = '- <ansiblue>Number of Course Instances:</ansiblue> %d' % len(course_instances_data)
             text = HTML(text)
-            values = sorted(((PLCourseInstance(p,self), HTML('<ansigreen>%s</ansigreen> (%s)' % (course_instances_data[p]['longName'], p.name))) for p in course_instances_data), key=lambda x: x[1].value.lower())
+            values = sorted(((ci, HTML('<ansigreen>%s</ansigreen> (%s)' % (d['longName'], ci.path.name))) for ci, d in course_instances_data.items()), key=lambda x: x[1].value.lower())
             values.append(APP_EXIT_TUPLE)
             val = radiolist_dialog(title=title, text=text, values=values).run()
             if val is None:
@@ -142,12 +151,11 @@ class PLCourse:
         while True:
             title = "Questions (%s)" % get_course_title(self)
             questions_data = dict()
-            for p in (self.path / 'questions').rglob('question.html'):
-                with open(p.parent / 'info.json') as f:
-                    questions_data[p.parent] = jload(f)
+            for q in self.iter_questions():
+                questions_data[q] = q.get_info_data()
             text = '- <ansiblue>Number of Questions:</ansiblue> %d' % len(questions_data)
             text = HTML(text)
-            values = sorted(((PLQuestion(p,self), HTML('<ansigreen>%s</ansigreen> (%s)' % (questions_data[p]['title'], p.name))) for p in questions_data), key=lambda x: x[1].value.lower())
+            values = sorted(((q, HTML('<ansigreen>%s</ansigreen> (%s)' % (d['title'], q.path.name))) for q, d in questions_data.items()), key=lambda x: x[1].value.lower())
             values.append(APP_EXIT_TUPLE)
             val = radiolist_dialog(title=title, text=text, values=values).run()
             if val is None:
@@ -168,16 +176,20 @@ def get_course_instance_title(infocourseinstance_data):
 # https://github.com/PrairieLearn/PrairieLearn/blob/master/apps/prairielearn/src/schemas/schemas/infoCourseInstance.json
 class PLCourseInstance:
     # initialize this PLCourseInstance object
-    def __init__(self, path, course):
+    def __init__(self, path):
         if not (path / 'infoCourseInstance.json').is_file():
             error("Invalid PrairieLearn course instance path: %s" % path)
-        self.path = path; self.course = course
+        self.path = path
+
+    # load and return the data from this course instance's 'infoCourseInstance.json' file
+    def get_info_data(self):
+        with open(self.path / 'infoCourseInstance.json') as f:
+            return jload(f)
 
     # run app for the home view of this PLCourseInstance object
     def app_home(self):
         while True:
-            with open(self.path / 'infoCourseInstance.json') as f:
-                data = jload(f)
+            data = self.get_info_data()
             order = [('uuid','UUID'), ('longName','Long Name')]
             text = '- <ansiblue>Path:</ansiblue> %s\n' % self.path
             text += '\n'.join('- <ansiblue>%s:</ansiblue> %s' % (s, data[k]) for k, s in order)
@@ -207,7 +219,7 @@ class PLCourseInstance:
                     assessments_data[p.parent] = jload(f)
             text = '- <ansiblue>Number of Assessments:</ansiblue> %d' % len(assessments_data)
             text = HTML(text)
-            values = sorted(((PLAssessment(p,self), HTML('<ansigreen>%s %s</ansigreen> - %s (%s)' % (assessments_data[p]['set'], assessments_data[p]['number'], assessments_data[p]['title'], assessments_data[p]['type']))) for p in assessments_data), key=lambda x: x[1].value.lower())
+            values = sorted(((PLAssessment(p), HTML('<ansigreen>%s %s</ansigreen> - %s (%s)' % (assessments_data[p]['set'], assessments_data[p]['number'], assessments_data[p]['title'], assessments_data[p]['type']))) for p in assessments_data), key=lambda x: x[1].value.lower())
             values.append(APP_EXIT_TUPLE)
             val = radiolist_dialog(title=title, text=text, values=values).run()
             if val is None:
@@ -228,10 +240,10 @@ def get_assessment_title(assessment_data):
 # https://github.com/PrairieLearn/PrairieLearn/blob/master/apps/prairielearn/src/schemas/schemas/infoAssessment.json
 class PLAssessment:
     # initialize this PLAssessment object
-    def __init__(self, path, course_instance):
+    def __init__(self, path):
         if not (path / 'infoAssessment.json').is_file():
             error("Invalid PrairieLearn assessment path: %s" % path)
-        self.path = path; self.course_instance = course_instance
+        self.path = path
 
     # run app for home view of this PLAssessment object
     def app_home(self):
@@ -264,7 +276,7 @@ class PLAssessment:
                 data = jload(f)
             text = '- <ansiblue>Number of Zones:</ansiblue> %d' % len(data['zones'])
             text = HTML(text)
-            values = [(PLZone(zone_data,self), HTML('<ansigreen>%s</ansigreen>' % zone_data['title'])) for zone_data in data['zones']]
+            values = [(PLZone(zone_data), HTML('<ansigreen>%s</ansigreen>' % zone_data['title'])) for zone_data in data['zones']]
             values.append(APP_EXIT_TUPLE)
             val = radiolist_dialog(title="Zones (%s)" % get_assessment_title(self), text=text, values=values).run()
             if val is None:
@@ -277,13 +289,14 @@ class PLAssessment:
 # class to represent a PrairieLearn assessment zone
 class PLZone:
     # initialize this PLZone object
-    def __init__(self, data, assessment):
-        self.data = data; self.assessment = assessment
+    def __init__(self, data):
+        self.data = data
 
     # run app for home view of this PLZone object
     def app_home(self):
         while True:
-            print("TODO"); exit() # TODO
+            title = self.data['title']
+            exit() # TODO CONTINUE HERE
 
 # get the "<NAME>" title string from an 'info.json' file's loaded data (or load the data if given a PLQuestion)
 def get_question_title(info_data):
@@ -296,10 +309,15 @@ def get_question_title(info_data):
 # https://github.com/PrairieLearn/PrairieLearn/blob/master/apps/prairielearn/src/schemas/schemas/infoQuestion.json
 class PLQuestion:
     # initialize this PLQuestion object
-    def __init__(self, path, course):
+    def __init__(self, path):
         if not (path / 'question.html').is_file() or not (path / 'info.json').is_file():
             error("Invalid PrairieLearn question path: %s" % path)
-        self.path = path; self.course = course
+        self.path = path
+
+    # load and return the data from this course instance's 'infoCourseInstance.json' file
+    def get_info_data(self):
+        with open(self.path / 'info.json') as f:
+            return jload(f)
 
     # run app for home view of this PLQuestion object
     def app_home(self):
