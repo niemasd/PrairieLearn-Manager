@@ -95,11 +95,13 @@ class PLCourse:
             with open(self.path / 'infoCourse.json') as f:
                 data = jload(f)
             order = [('uuid','UUID'), ('name','Name'), ('title','Title')]
-            text = '\n'.join('- <ansiblue>%s:</ansiblue> %s' % (s, data[k]) for k, s in order)
+            text = '- <ansiblue>Path:</ansiblue> %s\n' % self.path
+            text += '\n'.join('- <ansiblue>%s:</ansiblue> %s' % (s, data[k]) for k, s in order)
             text += '\n- <ansiblue>Topics:</ansiblue> %s' % {True:'None', False:', '.join(data['topics'])}[len(data['topics']) == 0]
             pass # TODO ADD OTHER COURSE INFO
             values = [
                 ('course_instances', HTML("<ansigreen>View Course Instances</ansigreen>")),
+                ('questions', HTML('<ansigreen>View Questions</ansigreen>')),
                 APP_EXIT_TUPLE,
             ]
             text = HTML(text)
@@ -110,6 +112,8 @@ class PLCourse:
                 exit()
             elif val == 'course_instances':
                 self.app_course_instances()
+            elif val == 'questions':
+                self.app_questions()
             else:
                 error("Invalid selection: %s" % val)
 
@@ -133,7 +137,27 @@ class PLCourse:
             else:
                 val.app_home()
 
-# get the "Course Instance: <NAME>" title string from an 'infoCourseInstance.json' file's loaded data (or load the data if given a PLCourseInstance)
+    # run app for questions view
+    def app_questions(self):
+        while True:
+            title = "Questions (%s)" % get_course_title(self)
+            questions_data = dict()
+            for p in (self.path / 'questions').rglob('question.html'):
+                with open(p.parent / 'info.json') as f:
+                    questions_data[p.parent] = jload(f)
+            text = '- <ansiblue>Number of Questions:</ansiblue> %d' % len(questions_data)
+            text = HTML(text)
+            values = sorted(((PLQuestion(p), HTML('<ansigreen>%s</ansigreen> (%s)' % (questions_data[p]['title'], p.name))) for p in questions_data), key=lambda x: x[1].value.lower())
+            values.append(APP_EXIT_TUPLE)
+            val = radiolist_dialog(title=title, text=text, values=values).run()
+            if val is None:
+                break
+            elif val is False:
+                exit()
+            else:
+                val.app_home()
+
+# get the "<NAME>" title string from an 'infoCourseInstance.json' file's loaded data (or load the data if given a PLCourseInstance)
 def get_course_instance_title(infocourseinstance_data):
     if isinstance(infocourseinstance_data, PLCourseInstance):
         with open(infocourseinstance_data.path / 'infoCourseInstance.json') as f:
@@ -155,8 +179,9 @@ class PLCourseInstance:
             with open(self.path / 'infoCourseInstance.json') as f:
                 data = jload(f)
             order = [('uuid','UUID'), ('longName','Long Name')]
-            text = '\n'.join('- <ansiblue>%s:</ansiblue> %s' % (s, data[k]) for k, s in order)
-            pass # TODO ADD OTHER COURSE INFO
+            text = '- <ansiblue>Path:</ansiblue> %s\n' % self.path
+            text += '\n'.join('- <ansiblue>%s:</ansiblue> %s' % (s, data[k]) for k, s in order)
+            pass # TODO ADD OTHER COURSE INSTANCE INFO
             values = [
                 ('assessments', HTML('<ansigreen>View Assessments</ansigreen>')),
                 APP_EXIT_TUPLE,
@@ -214,13 +239,76 @@ class PLAssessment:
             with open(self.path / 'infoAssessment.json') as f:
                 data = jload(f)
             order = [('uuid','UUID'), ('type','Type'), ('set','Set'), ('number','Number'), ('title','Title')]
-            text = '\n'.join('- <ansiblue>%s:</ansiblue> %s' % (s, data[k]) for k, s in order)
-            pass # TODO ADD OTHER COURSE INFO
+            text = '- <ansiblue>Path:</ansiblue> %s\n' % self.path
+            text += '\n'.join('- <ansiblue>%s:</ansiblue> %s' % (s, data[k]) for k, s in order)
+            pass # TODO ADD OTHER ASSESSMENT INFO
             values = [
+                ('questions', HTML('<ansigreen>View Questions</ansigreen>')),
                 APP_EXIT_TUPLE,
             ]
             text = HTML(text)
             val = radiolist_dialog(title='Assessment: %s' % get_assessment_title(data), text=text, values=values).run()
+            if val is None:
+                break
+            elif val is False:
+                exit()
+            elif val == 'questions':
+                self.app_questions()
+            else:
+                error("Invalid selection: %s" % val)
+
+    # run app for questions view
+    def app_questions(self):
+        while True:
+            with open(self.path / 'infoAssessment.json') as f:
+                data = jload(f)
+            print(data); exit() # TODO DISPLAY QUESTIONS, IDEALLY BY ZONE
+            questions_data = dict()
+            for p in (self.path / 'questions').rglob('question.html'):
+                with open(p.parent / 'info.json') as f:
+                    questions_data[p.parent] = jload(f)
+            text = '- <ansiblue>Number of Questions:</ansiblue> %d' % len(questions_data)
+            text = HTML(text)
+            values = sorted(((PLQuestion(p), HTML('<ansigreen>%s</ansigreen> (%s)' % (questions_data[p]['title'], p.name))) for p in questions_data), key=lambda x: x[1].value.lower())
+            values.append(APP_EXIT_TUPLE)
+            val = radiolist_dialog(title="Questions (%s)" % get_assessment_title(self), text=text, values=values).run()
+            if val is None:
+                break
+            elif val is False:
+                exit()
+            else:
+                val.app_home()
+
+# get the "<NAME>" title string from an 'info.json' file's loaded data (or load the data if given a PLQuestion)
+def get_question_title(info_data):
+    if isinstance(info_data, PLQuestion):
+        with open(info_data.path / 'info.json') as f:
+            info_data = jload(f)
+    return info_data['title']
+
+# class to represent a PrairieLearn question
+# TODO ADD SCHEMA URL
+class PLQuestion:
+    # initialize this PLAssessment object
+    def __init__(self, path):
+        if not (path / 'question.html').is_file() or not (path / 'info.json').is_file():
+            error("Invalid PrairieLearn question path: %s" % path)
+        self.path = path
+
+    # run app for home view of this PLQuestion object
+    def app_home(self):
+        while True:
+            with open(self.path / 'info.json') as f:
+                data = jload(f)
+            order = [('uuid','UUID'), ('title','Title')]
+            text = '- <ansiblue>Path:</ansiblue> %s\n' % self.path
+            text += '\n'.join('- <ansiblue>%s:</ansiblue> %s' % (s, data[k]) for k, s in order)
+            pass # TODO ADD OTHER COURSE INSTANCE INFO
+            values = [
+                APP_EXIT_TUPLE,
+            ]
+            text = HTML(text)
+            val = radiolist_dialog(title='Question: %s' % get_question_title(data), text=text, values=values).run()
             if val is None:
                 break
             elif val is False:
