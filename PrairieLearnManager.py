@@ -116,9 +116,11 @@ class PLCourse:
     def app_home(self):
         while True:
             data = self.get_info_data()
-            order = [('uuid','UUID'), ('name','Name'), ('title','Title')]
-            text = '- <ansiblue>Path:</ansiblue> %s\n' % self.path
-            text += '\n'.join('- <ansiblue>%s:</ansiblue> %s' % (s, data[k]) for k, s in order)
+            order = [('uuid','UUID'), ('comment','Comment'), ('name','Name'), ('title','Title')]
+            text = '- <ansiblue>Path:</ansiblue> %s' % self.path
+            for k, s in order:
+                if k in data:
+                    text += '\n- <ansiblue>%s:</ansiblue> %s' % (s, data[k])
             text += '\n- <ansiblue>Topics:</ansiblue> %s' % {True:'None', False:', '.join(data['topics'])}[len(data['topics']) == 0]
             pass # TODO ADD OTHER COURSE INFO
             values = [
@@ -202,10 +204,21 @@ class PLCourseInstance:
     def app_home(self):
         while True:
             data = self.get_info_data()
-            order = [('uuid','UUID'), ('longName','Long Name')]
+            order = [('uuid','UUID'), ('comment','Comment'), ('longName','Long Name'), ('hideInEnrollPage','Hide in Enroll Page'), ('timezone','Time Zone')]
             text = '- <ansiblue>Path:</ansiblue> %s\n' % self.path
-            text += '\n'.join('- <ansiblue>%s:</ansiblue> %s' % (s, data[k]) for k, s in order)
-            pass # TODO ADD OTHER COURSE INSTANCE INFO
+            for k, s in order:
+                if k in data:
+                    text += '\n- <ansiblue>%s:</ansiblue> %s' % (s, data[k])
+            # TODO MOVE TO SEPARATE "View Access Controls" SELECTION SIMILAR TO HOW ZONES WORK IN ASSESSMENTS
+            # TODO TO DO THE ABOVE, I SHOULD MAKE A PLAccess CLASS OR SOMETHING
+            if 'allowAccess' in data:
+                text += '\n- <ansiblue>Access Controls:</ansiblue>'
+                order = [('comment','Comment'), ('institution','Institution'), ('startDate','Start Date'), ('endDate','End Date')]
+                for i, access_data in enumerate(data['allowAccess']):
+                    text += '\n  - <ansiblue>Access Control %d:</ansiblue>' % (i+1)
+                    for k, s in order:
+                        if k in access_data:
+                            text += '\n    - <ansiblue>%s:</ansiblue> %s' % (s, access_data[k])
             values = [
                 ('assessments', HTML('<ansigreen>View Assessments</ansigreen>')),
                 APP_EXIT_TUPLE,
@@ -267,12 +280,14 @@ class PLAssessment:
     def app_home(self):
         while True:
             data = self.get_info_data()
-            order = [('uuid','UUID'), ('type','Type'), ('set','Set'), ('number','Number'), ('title','Title')]
-            text = '- <ansiblue>Path:</ansiblue> %s\n' % self.path
-            text += '\n'.join('- <ansiblue>%s:</ansiblue> %s' % (s, data[k]) for k, s in order)
+            order = [('uuid','UUID'), ('comment','Comment'), ('type','Type'), ('set','Set'), ('number','Number'), ('title','Title'), ('shuffleQuestions','Shuffle Questions'), ('allowRealTimeGrading','Allow Real-Time Grading')]
+            text = '- <ansiblue>Path:</ansiblue> %s' % self.path
+            for k, s in order:
+                if k in data:
+                    text += '\n- <ansiblue>%s:</ansiblue> %s' % (s, data[k])
             pass # TODO ADD OTHER ASSESSMENT INFO
             values = [
-                ('zones', HTML('<ansigreen>View Zones</ansigreen>')),
+                ('zones', HTML('<ansigreen>View Zones (%d)</ansigreen>' % len(data['zones']))),
                 APP_EXIT_TUPLE,
             ]
             text = HTML(text)
@@ -391,7 +406,7 @@ class PLQuestion:
         while True:
             with open(self.path / 'info.json') as f:
                 data = jload(f)
-            order = [('uuid','UUID'), ('title','Title')]
+            order = [('uuid','UUID'), ('comment','Comment'), ('title','Title')]
             text = '- <ansiblue>Path:</ansiblue> %s\n' % self.path
             text += '\n'.join('- <ansiblue>%s:</ansiblue> %s' % (s, data[k]) for k, s in order)
             pass # TODO ADD OTHER COURSE INSTANCE INFO
