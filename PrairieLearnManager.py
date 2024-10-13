@@ -28,10 +28,45 @@ except:
 # useful prompt_toolkit constants
 APP_EXIT_TUPLE = (False, HTML('<ansired>--- Exit Application ---</ansired>'))
 
-# app: welcome message
-def app_welcome():
-    text = HTML("Welcome to <ansiblue>PrairieLearn Manager v%s</ansiblue>!\n\n<ansigreen>Niema Moshiri 2024</ansigreen>" % VERSION)
-    message_dialog(title=DEFAULT_TITLE, text=text).run()
+# align two strings using Needleman-Wunsch
+def align(s, t, match_score=1, mismatch_penalty=float('-inf'), gap_penalty=-1):
+    # set things up, e.g. convert s and t to strings if not already
+    diag = {True:match_score, False:mismatch_penalty} # diag[s[i] == t[j]] gets you the match score / mismatch penalty
+    if not isinstance(s, str):
+        s = str(s)
+    if not isinstance(t, str):
+        t = str(t)
+
+    # perform DP, where cells are (score, i, j) tuples (or None if not yet calculated)
+    dp = [[None for j in range(len(t)+1)] for i in range(len(s)+1)]
+    dp[0][0] = (0, None, None)
+    for i in range(len(s)):
+        dp[i+1][0] = (gap_penalty * (i+1), i, 0)
+    for j in range(len(t)):
+        dp[0][j+1] = (gap_penalty * (j+1), 0, j)
+    for i in range(len(s)):
+        for j in range(len(t)):
+            dp[i+1][j+1] = max((
+                (dp[i][j][0] + diag[s[i] == t[j]], i, j), # match/mismatch
+                (dp[i+1][j][0] + gap_penalty, i+1, j),    # gap in s
+                (dp[i][j+1][0] + gap_penalty, i, j+1),    # gap in t
+            ))
+
+    # backtrack and return result (s_aln and t_aln need to be reversed before returning)
+    s_aln = list(); t_aln = list(); i = len(s); j = len(t)
+    while True:
+        if i == 0 and j == 0:
+            break
+        if dp[i][j][1] == i:
+            s_aln.append('-')
+        else:
+            s_aln.append(s[i-1])
+        if dp[i][j][2] == j:
+            t_aln.append('-')
+        else:
+            t_aln.append(t[j-1])
+        DUMMY, i, j = dp[i][j]
+    return ''.join(s_aln)[::-1], ''.join(t_aln)[::-1]
 
 # find the root course folder given a subfolder
 def find_course_path(orig_path):
@@ -41,6 +76,11 @@ def find_course_path(orig_path):
             return curr_path
         curr_path = curr_path.parent
     error("Unable to find root course folder: %s" % orig_path)
+
+# app: welcome message
+def app_welcome():
+    text = HTML("Welcome to <ansiblue>PrairieLearn Manager v%s</ansiblue>!\n\n<ansigreen>Niema Moshiri 2024</ansigreen>" % VERSION)
+    message_dialog(title=DEFAULT_TITLE, text=text).run()
 
 # app: navigate to find PrairieLearn course
 def app_nav_course(curr_path=Path.cwd(), title=DEFAULT_TITLE, show_hidden=False):
@@ -144,7 +184,7 @@ class PLCourse:
     # run app for course instances view
     def app_course_instances(self):
         while True:
-            title = "Course Instances (%s)" % get_course_title(self)
+            title = "Course Instances - %s" % get_course_title(self)
             course_instances_data = {ci:ci.get_info_data() for ci in self.iter_course_instances()}
             text = '- <ansiblue>Number of Course Instances:</ansiblue> %d' % len(course_instances_data)
             text = HTML(text)
@@ -161,7 +201,7 @@ class PLCourse:
     # run app for questions view
     def app_questions(self):
         while True:
-            title = "Questions (%s)" % get_course_title(self)
+            title = "Questions - %s" % get_course_title(self)
             questions_data = {q:q.get_info_data() for q in self.iter_questions()}
             text = '- <ansiblue>Number of Questions:</ansiblue> %d' % len(questions_data)
             text = HTML(text)
@@ -190,6 +230,12 @@ class PLCourseInstance:
             error("Invalid PrairieLearn course instance path: %s" % path)
         self.path = path
 
+    # iterate over access controls in this course instance
+    def iter_access_controls(self):
+        data = self.get_info_data()
+        for access_data in data['allowAccess']:
+            yield PLAccess(access_data, self.path / 'infoCourseInstance.json')
+
     # iterater over assessments in this course instance
     def iter_assessments(self):
         for p in (self.path / 'assessments').rglob('infoAssessment.json'):
@@ -205,39 +251,42 @@ class PLCourseInstance:
         while True:
             data = self.get_info_data()
             order = [('uuid','UUID'), ('comment','Comment'), ('longName','Long Name'), ('hideInEnrollPage','Hide in Enroll Page'), ('timezone','Time Zone')]
-            text = '- <ansiblue>Path:</ansiblue> %s\n' % self.path
+            text = '- <ansiblue>Path:</ansiblue> %s' % self.path
             for k, s in order:
                 if k in data:
                     text += '\n- <ansiblue>%s:</ansiblue> %s' % (s, data[k])
             # TODO MOVE TO SEPARATE "View Access Controls" SELECTION SIMILAR TO HOW ZONES WORK IN ASSESSMENTS
             # TODO TO DO THE ABOVE, I SHOULD MAKE A PLAccess CLASS OR SOMETHING
             if 'allowAccess' in data:
-                text += '\n- <ansiblue>Access Controls:</ansiblue>'
-                order = [('comment','Comment'), ('institution','Institution'), ('startDate','Start Date'), ('endDate','End Date')]
-                for i, access_data in enumerate(data['allowAccess']):
-                    text += '\n  - <ansiblue>Access Control %d:</ansiblue>' % (i+1)
-                    for k, s in order:
-                        if k in access_data:
-                            text += '\n    - <ansiblue>%s:</ansiblue> %s' % (s, access_data[k])
+                text += '\n- <ansiblue>Number of Access Controls:</ansiblue> %d' % len(data['allowAccess'])
             values = [
+                ('access_controls', HTML('<ansigreen>View Access Controls</ansigreen>')),
                 ('assessments', HTML('<ansigreen>View Assessments</ansigreen>')),
                 APP_EXIT_TUPLE,
             ]
             text = HTML(text)
-            val = radiolist_dialog(title='Course Instance: %s' % get_course_instance_title(data), text=text, values=values).run()
+            val = radiolist_dialog(title='Course Instance - %s' % get_course_instance_title(data), text=text, values=values).run()
             if val is None:
                 break
             elif val is False:
                 exit()
+            elif val == 'access_controls':
+                self.app_access_controls()
             elif val == 'assessments':
                 self.app_assessments()
             else:
                 error("Invalid selection: %s" % val)
 
+    # run app for access controls view
+    def app_access_controls(self):
+        while True:
+            title = "Access Controls - %s" % get_course_instance_title(self)
+            exit(1) # TODO
+
     # run app for assessments view
     def app_assessments(self):
         while True:
-            title = "Assessments (%s)" % get_course_instance_title(self)
+            title = "Assessments - %s" % get_course_instance_title(self)
             assessments_data = {a:a.get_info_data() for a in self.iter_assessments()}
             text = '- <ansiblue>Number of Assessments:</ansiblue> %d' % len(assessments_data)
             text = HTML(text)
@@ -255,7 +304,7 @@ class PLCourseInstance:
 def get_assessment_title(x):
     if isinstance(x, PLAssessment):
         x = x.get_info_data()
-    return '%s %s (%s)' % (x['set'], x['number'], x['title'])
+    return '%s %s: %s' % (x['set'], x['number'], x['title'])
 
 # class to represent a PrairieLearn assessment
 # https://github.com/PrairieLearn/PrairieLearn/blob/master/apps/prairielearn/src/schemas/schemas/infoAssessment.json
@@ -273,8 +322,8 @@ class PLAssessment:
 
     # iterate over zones in this assessment
     def iter_zones(self):
-        for i in range(len(self.get_info_data()['zones'])):
-            yield PLZone(self.path / 'infoAssessment.json', i)
+        for zone_data in self.get_info_data()['zones']:
+            yield PLZone(zone_data, self.path / 'infoAssessment.json')
 
     # run app for home view of this PLAssessment object
     def app_home(self):
@@ -287,11 +336,11 @@ class PLAssessment:
                     text += '\n- <ansiblue>%s:</ansiblue> %s' % (s, data[k])
             pass # TODO ADD OTHER ASSESSMENT INFO
             values = [
-                ('zones', HTML('<ansigreen>View Zones (%d)</ansigreen>' % len(data['zones']))),
+                ('zones', HTML('<ansigreen>View Zones</ansigreen>')),
                 APP_EXIT_TUPLE,
             ]
             text = HTML(text)
-            val = radiolist_dialog(title='Assessment: %s' % get_assessment_title(data), text=text, values=values).run()
+            val = radiolist_dialog(title='Assessment - %s' % get_assessment_title(data), text=text, values=values).run()
             if val is None:
                 break
             elif val is False:
@@ -309,7 +358,7 @@ class PLAssessment:
             text = HTML(text)
             values = [(z, HTML('<ansigreen>%s</ansigreen>' % z.get_data()['title'])) for z in self.iter_zones()]
             values.append(APP_EXIT_TUPLE)
-            val = radiolist_dialog(title="Zones (%s)" % get_assessment_title(self), text=text, values=values).run()
+            val = radiolist_dialog(title="Zones - %s" % get_assessment_title(self), text=text, values=values).run()
             if val is None:
                 break
             elif val is False:
@@ -317,37 +366,58 @@ class PLAssessment:
             else:
                 val.app_home()
 
+# class to represent a PrairieLearn access control
+class PLAccess:
+    # initialize this PLAccess object
+    def __init__(self, data, path):
+        self.data = data; self.path = path
+
+    # get the data defining this access control
+    def get_data(self):
+        return self.data
+
+    # # run app for home view of this PLAccess object
+    def app_home(self):
+        while True:
+            text = '- <ansiblue>Path:</ansiblue> %s' % self.path
+            pass # TODO ADD OTHER ACCESS INFO
+            text = HTML(text)
+            valies = [
+                APP_EXIT_TUPLE,
+            ]
+            val = radiolist_dialog(title=title, text=text, values=values).run()
+            if val is None:
+                break
+            elif val is False:
+                exit()
+            else:
+                error("Invalid selection: %s" % val)
+
 # class to represent a PrairieLearn assessment zone
 class PLZone:
     # initialize this PLZone object
-    def __init__(self, path, index):
-        if not path.is_file():
-            error("Invalid PrairieLearn assessment info path: %s" % path)
-        self.path = path; self.index = index
+    def __init__(self, data, path):
+        self.data = data; self.path = path
 
     # get the data defining this zone
     def get_data(self):
-        with open(self.path) as f:
-            return jload(f)['zones'][self.index]
+        return self.data
 
     # iterate over questions in this zone
     def iter_questions(self):
-        data = self.get_data()
         questions_path = find_course_path(self.path) / 'questions'
         if not questions_path.is_dir():
             error("Questions path not found: %s" % questions_path)
-        for q_data in data['questions']:
+        for q_data in self.data['questions']:
             yield PLQuestion(questions_path / q_data['id'])
 
     # run app for home view of this PLZone object
     def app_home(self):
         while True:
-            data = self.get_data()
-            title = 'Zone: %s' % data['title']
+            title = 'Zone - %s' % self.data['title']
             text = '- <ansiblue>Path:</ansiblue> %s' % self.path
-            text += '\n- <ansiblue>Index:</ansiblue> %s' % self.index
-            text = HTML(text)
             pass # TODO ADD OTHER ZONE INFO
+            text = HTML(text)
             values = [
                 ('questions', HTML('<ansigreen>View Questions</ansigreen>')),
                 APP_EXIT_TUPLE,
@@ -365,8 +435,7 @@ class PLZone:
     # run app for questions view
     def app_questions(self):
         while True:
-            data = self.get_data()
-            title = "Questions (%s)" % data['title']
+            title = "Questions - %s" % self.data['title']
             questions_data = {q:q.get_info_data() for q in self.iter_questions()}
             text = '- <ansiblue>Number of Questions:</ansiblue> %d' % len(questions_data)
             text = HTML(text)
@@ -407,14 +476,16 @@ class PLQuestion:
             with open(self.path / 'info.json') as f:
                 data = jload(f)
             order = [('uuid','UUID'), ('comment','Comment'), ('title','Title')]
-            text = '- <ansiblue>Path:</ansiblue> %s\n' % self.path
-            text += '\n'.join('- <ansiblue>%s:</ansiblue> %s' % (s, data[k]) for k, s in order)
+            text = '- <ansiblue>Path:</ansiblue> %s' % self.path
+            for k, s in order:
+                if k in data:
+                    text += '\n- <ansiblue>%s:</ansiblue> %s' % (s, data[k])
             pass # TODO ADD OTHER COURSE INSTANCE INFO
             values = [
                 APP_EXIT_TUPLE,
             ]
             text = HTML(text)
-            val = radiolist_dialog(title='Question: %s' % get_question_title(data), text=text, values=values).run()
+            val = radiolist_dialog(title='Question - %s' % get_question_title(data), text=text, values=values).run()
             if val is None:
                 break
             elif val is False:
